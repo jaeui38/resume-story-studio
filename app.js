@@ -1,4 +1,6 @@
 const $ = id => document.getElementById(id);
+const oneDriveConfig = { clientId: '22d17617-e89a-4cb4-a40e-f15ec8e71eb3', authority: 'https://login.microsoftonline.com/consumers', scope: 'openid profile Files.ReadWrite.AppFolder' };
+let cloudSyncTimer;
 const questionFields = ['question1', 'question2', 'question3', 'question4', 'question5'];
 const profileFields = ['company', 'role', 'jobDescription', ...questionFields, 'keywords'];
 const defaultProjects = [
@@ -18,8 +20,39 @@ if (typeof state.draft !== 'string') state.draft = '';
 if (!Array.isArray(state.archives)) state.archives = [];
 if (typeof state.activeArchiveId !== 'string') state.activeArchiveId = '';
 
-function save() { localStorage.setItem('resumeStudioV2', JSON.stringify(state)); }
+function save() { localStorage.setItem('resumeStudioV2', JSON.stringify(state)); if (oneDriveToken()) queueCloudSync(); }
 function showToast(message) { $('toast').textContent = message; $('toast').classList.add('visible'); setTimeout(() => $('toast').classList.remove('visible'), 2300); }
+function redirectUri() { return `${window.location.origin}${window.location.pathname}`; }
+function oneDriveToken() { const token = readSaved('resumeStudioOneDriveToken'); return token?.accessToken && token.expiresAt > Date.now() ? token.accessToken : ''; }
+function base64Url(bytes) { return btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+async function beginOneDriveLogin() {
+  if (window.location.protocol === 'file:') { showToast('OneDrive 로그인은 웹사이트를 배포한 뒤 사용할 수 있습니다.'); return; }
+  const verifier = base64Url(crypto.getRandomValues(new Uint8Array(32))); const challenge = base64Url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))); const loginState = base64Url(crypto.getRandomValues(new Uint8Array(16)));
+  sessionStorage.setItem('resumeStudioPkceVerifier', verifier); sessionStorage.setItem('resumeStudioLoginState', loginState);
+  const params = new URLSearchParams({ client_id: oneDriveConfig.clientId, response_type: 'code', redirect_uri: redirectUri(), response_mode: 'query', scope: oneDriveConfig.scope, code_challenge: challenge, code_challenge_method: 'S256', state: loginState });
+  window.location.assign(`${oneDriveConfig.authority}/oauth2/v2.0/authorize?${params}`);
+}
+async function finishOneDriveLogin() {
+  const params = new URLSearchParams(window.location.search); const code = params.get('code'); if (!code) return;
+  const verifier = sessionStorage.getItem('resumeStudioPkceVerifier'); const expectedState = sessionStorage.getItem('resumeStudioLoginState'); if (!verifier || params.get('state') !== expectedState) { showToast('Microsoft 로그인 상태를 확인할 수 없습니다. 다시 로그인해 주세요.'); return; }
+  try {
+    const body = new URLSearchParams({ client_id: oneDriveConfig.clientId, grant_type: 'authorization_code', code, redirect_uri: redirectUri(), code_verifier: verifier });
+    const response = await fetch(`${oneDriveConfig.authority}/oauth2/v2.0/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body }); if (!response.ok) throw new Error('token');
+    const token = await response.json(); localStorage.setItem('resumeStudioOneDriveToken', JSON.stringify({ accessToken: token.access_token, expiresAt: Date.now() + (token.expires_in - 60) * 1000 })); sessionStorage.removeItem('resumeStudioPkceVerifier'); sessionStorage.removeItem('resumeStudioLoginState'); history.replaceState({}, '', redirectUri()); await loadFromOneDrive(); updateOneDriveStatus(); showToast('OneDrive에 연결했습니다.');
+  } catch { showToast('OneDrive 로그인에 실패했습니다. Redirect URI 설정을 확인해 주세요.'); }
+}
+async function graphRequest(path, options = {}) { const token = oneDriveToken(); if (!token) throw new Error('login'); return fetch(`https://graph.microsoft.com/v1.0${path}`, { ...options, headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` } }); }
+async function loadFromOneDrive() {
+  const response = await graphRequest('/me/drive/special/approot:/resume-studio-data.json:/content');
+  if (response.status === 404) { await syncToOneDrive(); return; } if (!response.ok) throw new Error('download'); const cloudState = await response.json();
+  if (cloudState && Array.isArray(cloudState.projects) && Array.isArray(cloudState.archives)) { Object.keys(state).forEach(key => delete state[key]); Object.assign(state, cloudState); localStorage.setItem('resumeStudioV2', JSON.stringify(state)); location.reload(); }
+}
+async function syncToOneDrive() {
+  try { const response = await graphRequest('/me/drive/special/approot:/resume-studio-data.json:/content', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state) }); if (!response.ok) throw new Error('upload'); updateOneDriveStatus('OneDrive에 자동 저장됨'); }
+  catch { updateOneDriveStatus('OneDrive 저장 대기'); }
+}
+function queueCloudSync() { clearTimeout(cloudSyncTimer); cloudSyncTimer = setTimeout(syncToOneDrive, 900); }
+function updateOneDriveStatus(message) { const connected = Boolean(oneDriveToken()); $('oneDriveStatus').textContent = message || (connected ? 'OneDrive 연결됨' : 'OneDrive 연결 전'); $('oneDriveLogin').classList.toggle('hidden', connected); $('oneDriveSync').classList.toggle('hidden', !connected); }
 function escapeHtml(value = '') { return String(value).replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#039;', '"':'&quot;' })[char]); }
 function profileData() { return Object.fromEntries(profileFields.map(id => [id, $(id).value.trim()])); }
 function usedProjectIds(exceptQuestion = '') { return Object.entries(state.allocations).filter(([question]) => question !== exceptQuestion).flatMap(([, ids]) => Array.isArray(ids) ? ids : []); }
@@ -130,6 +163,9 @@ $('backToDraft').addEventListener('click', () => switchTab('draft'));
 $('archiveSearch').addEventListener('input', renderArchives);
 $('exportBackup').addEventListener('click', exportBackup);
 $('importBackup').addEventListener('change', event => { if (event.target.files?.[0]) importBackup(event.target.files[0]); event.target.value = ''; });
+$('oneDriveLogin').addEventListener('click', beginOneDriveLogin);
+$('oneDriveSync').addEventListener('click', async () => { await syncToOneDrive(); showToast('OneDrive에 저장을 요청했습니다.'); });
 $('projectForm').addEventListener('submit', event => { event.preventDefault(); const id = $('editingProjectId').value || `project-${Date.now()}`; const project = { id, title: $('projectTitle').value.trim(), period: $('projectPeriod').value.trim(), challenge: $('projectChallenge').value.trim(), action: $('projectAction').value.trim(), result: $('projectResult').value.trim(), meta: $('projectMeta').value.trim() }; const index = state.projects.findIndex(item => item.id === id); if (index === -1) state.projects.unshift(project); else state.projects[index] = project; save(); renderProjectCards(); resetProjectForm(); showToast(index === -1 ? '프로젝트를 추가했습니다.' : '프로젝트를 수정했습니다.'); });
 $('cancelEdit').addEventListener('click', resetProjectForm);
 renderCompetencies(); renderProjectCards(); renderArchives(); if (state.draft) renderDraft();
+updateOneDriveStatus(); finishOneDriveLogin();

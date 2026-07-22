@@ -6,6 +6,7 @@ header { max-width:680px; }
 .eyebrow { letter-spacing:.14em; font-weight:750; font-size:.72rem; color:var(--accent-dark); margin:0 0 10px; }
 h1 { font-family:Georgia, "Times New Roman", serif; font-size:clamp(2.25rem,5vw,4rem); letter-spacing:-.055em; margin:0; line-height:1.05; }
 .subtitle { margin:18px 0 0; color:var(--muted); line-height:1.7; font-size:1.04rem; }
+.onedrive-bar { display:flex; align-items:center; gap:9px; margin-top:20px; }.onedrive-bar span { color:var(--muted); font-size:.78rem; }
 .tabs { display:flex; gap:8px; margin-top:36px; border-bottom:1px solid var(--line); }
 .workflow-tabs b { display:inline-grid; place-items:center; width:18px; height:18px; border-radius:50%; background:#f2e7dc; font-size:.67rem; margin-right:3px; }.workflow-tabs .active b { background:#f8c9ba; }
 .tab-button { color:var(--muted); background:transparent; padding:12px 15px; border-radius:10px 10px 0 0; font-size:.9rem; }
