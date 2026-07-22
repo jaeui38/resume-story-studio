@@ -26,11 +26,15 @@ function redirectUri() { return `${window.location.origin}${window.location.path
 function oneDriveToken() { const token = readSaved('resumeStudioOneDriveToken'); return token?.accessToken && token.expiresAt > Date.now() ? token.accessToken : ''; }
 function base64Url(bytes) { return btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
 async function beginOneDriveLogin() {
-  if (window.location.protocol === 'file:') { showToast('OneDrive 로그인은 웹사이트를 배포한 뒤 사용할 수 있습니다.'); return; }
-  const verifier = base64Url(crypto.getRandomValues(new Uint8Array(32))); const challenge = base64Url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))); const loginState = base64Url(crypto.getRandomValues(new Uint8Array(16)));
-  sessionStorage.setItem('resumeStudioPkceVerifier', verifier); sessionStorage.setItem('resumeStudioLoginState', loginState);
-  const params = new URLSearchParams({ client_id: oneDriveConfig.clientId, response_type: 'code', redirect_uri: redirectUri(), response_mode: 'query', scope: oneDriveConfig.scope, code_challenge: challenge, code_challenge_method: 'S256', state: loginState });
-  window.location.assign(`${oneDriveConfig.authority}/oauth2/v2.0/authorize?${params}`);
+  try {
+    if (window.location.protocol === 'file:') { showToast('OneDrive 로그인은 웹사이트를 배포한 뒤 사용할 수 있습니다.'); return; }
+    if (!window.crypto?.subtle) throw new Error('crypto');
+    updateOneDriveStatus('Microsoft 로그인 페이지로 이동 중…');
+    const verifier = base64Url(crypto.getRandomValues(new Uint8Array(32))); const challenge = base64Url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))); const loginState = base64Url(crypto.getRandomValues(new Uint8Array(16)));
+    sessionStorage.setItem('resumeStudioPkceVerifier', verifier); sessionStorage.setItem('resumeStudioLoginState', loginState);
+    const params = new URLSearchParams({ client_id: oneDriveConfig.clientId, response_type: 'code', redirect_uri: redirectUri(), response_mode: 'query', scope: oneDriveConfig.scope, code_challenge: challenge, code_challenge_method: 'S256', state: loginState });
+    window.location.href = `${oneDriveConfig.authority}/oauth2/v2.0/authorize?${params}`;
+  } catch { updateOneDriveStatus(); showToast('로그인을 시작하지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.'); }
 }
 async function finishOneDriveLogin() {
   const params = new URLSearchParams(window.location.search); const code = params.get('code'); if (!code) return;
