@@ -2,7 +2,8 @@ const $ = id => document.getElementById(id);
 const oneDriveConfig = { clientId: '22d17617-e89a-4cb4-a40e-f15ec8e71eb3', authority: 'https://login.microsoftonline.com/consumers', scope: 'openid profile Files.ReadWrite.AppFolder' };
 let cloudSyncTimer;
 const questionFields = ['question1', 'question2', 'question3', 'question4', 'question5'];
-const profileFields = ['company', 'role', 'jobDescription', ...questionFields, 'keywords'];
+const limitFields = ['limit1', 'limit2', 'limit3', 'limit4', 'limit5'];
+const profileFields = ['company', 'role', 'jobDescription', 'keywords', 'companyNews', ...questionFields, ...limitFields];
 const defaultProjects = [
   { id: 'pickup-2024', title: 'Chip Pick Up Tool 개선', period: '2024년', challenge: 'Eject Pin과 상하 방식 Pick Up Tool 사용 중 Chip 파손 불량률 2% 발생.', action: '상하 방식 대신 좌우 드래그 방식의 Pick Up Tool을 제안하고 설비 제조사 하드웨어·소프트웨어 엔지니어 2명과 설비 개조 및 공정 테스트를 진행.', result: 'Chip Pick Up 및 Chip 파손 불량률 0% 달성, 6개월간 검증 후 양산 공정 적용.', meta: '반도체 DIE Bonding 공정·설비 개선 · SPC · FMEA' },
   { id: 'ausn-2025', title: 'Substrate AuSn 설계 변경', period: '2025년 · 6개월', challenge: 'AuSn 영역이 Chip Isolation 구간을 넘어 본딩되며 통전 및 역전류 불량률 1% 발생.', action: '제작업체와 협업해 AuSn 사이즈 축소 설계를 수립하고 주문 제작 및 공정 적용 전 과정을 주도.', result: '통전·역전류 불량률 0% 달성.', meta: '외주 제작업체 협업 · 설계 변경 · 양산 적용' }
@@ -91,11 +92,21 @@ function renderAllocations() {
 }
 function phrase(text) { return String(text || '').trim().replace(/[.!?]+$/, '').replace(/\s+/g, ' '); }
 function naturalStory(project, index) { const opening = index === 0 ? '대표적으로' : '또한'; return `${opening} ${project.title} 프로젝트를 수행하며 ${phrase(project.challenge)}라는 문제를 확인했습니다. 불량 원인을 제거하고 생산 공정에 적용 가능한 개선안을 마련하는 것을 과제로 삼았습니다. 이에 ${phrase(project.action)} 방식으로 개선을 추진했습니다. 그 결과 ${phrase(project.result)}라는 개선 결과를 확인했습니다.`; }
-function makeAnswer(question, projects, data) {
-  const company = data.company || '지원 기업'; const role = data.role || '지원 직무'; const atsTerms = data.keywords || data.jobDescription || '공정 개선, 설비 개선, 품질 향상, 불량 분석, SPC, FMEA'; const evidence = projects.map(naturalStory).join(' ');
-  return `${question}\n\n${company} ${role}에 지원하는 이유는 현장의 문제를 수치로 확인하고, 공정·설비 개선을 통해 검증 가능한 성과로 전환해 온 경험이 있기 때문입니다.\n\n${evidence}\n\n이 경험을 통해 ${atsTerms} 역량을 실무에서 축적했습니다. 개선안의 선택 근거, 협업 방식, 검증 기간과 수치 성과를 바탕으로 입사 후에도 과장된 목표보다 현장 데이터와 재현 가능한 실행으로 품질과 생산 안정성을 높이겠습니다.`;
+function limitFor(questionId, data) { const number = Number(questionId.replace('question', '')); const value = Number(data[`limit${number}`]); return Number.isFinite(value) && value >= 200 ? Math.min(value, 5000) : 1000; }
+function fitToLimit(text, limit) {
+  if (text.length <= limit) return text;
+  const sentences = text.match(/[^.!?]+[.!?]+/g) || [text]; let result = '';
+  for (const sentence of sentences) { if (`${result}${sentence}`.length > limit) break; result += sentence; }
+  return result || `${text.slice(0, Math.max(0, limit - 1)).trim()}…`;
 }
-function makeDraft(data) { return filledQuestions(data).map(questionId => makeAnswer(data[questionId], projectsFor(questionId), data)).join('\n\n━━━━━━━━━━━━━━━━━━━━\n\n'); }
+function makeAnswer(questionId, projects, data) {
+  const question = data[questionId]; const company = data.company || '지원 기업'; const role = data.role || '지원 직무'; const atsTerms = data.keywords || data.jobDescription || '공정 개선, 설비 개선, 품질 향상, 불량 분석, SPC, FMEA'; const evidence = projects.map(naturalStory).join(' ');
+  const newsLead = data.companyNews ? `${company}의 최근 동향인 ${phrase(data.companyNews)}에 주목했습니다. ` : '';
+  const overview = questionId === 'question1' ? '반도체 DIE Bonding 공정과 설비 개선을 수행하며 불량 분석, 협력사 기술 협업, 양산 안정화까지 경험해 왔습니다. ' : '';
+  const body = `${newsLead}${company} ${role}에 지원하는 이유는 ${overview}현장의 문제를 수치로 확인하고, 공정·설비 개선을 통해 검증 가능한 성과로 전환해 온 경험이 있기 때문입니다.\n\n${evidence}\n\n이 경험을 통해 ${atsTerms} 역량을 실무에서 축적했습니다. 개선안의 선택 근거, 협업 방식, 검증 기간과 수치 성과를 바탕으로 입사 후에도 과장된 목표보다 현장 데이터와 재현 가능한 실행으로 품질과 생산 안정성을 높이겠습니다.`;
+  return `${question}\n\n${fitToLimit(body, limitFor(questionId, data))}`;
+}
+function makeDraft(data) { return filledQuestions(data).map(questionId => makeAnswer(questionId, projectsFor(questionId), data)).join('\n\n━━━━━━━━━━━━━━━━━━━━\n\n'); }
 function fileDate(date = new Date()) { return date.toISOString().slice(0, 10); }
 function archiveFilename(data) { const company = (data.company || '지원기업').replace(/[\\/:*?"<>|]/g, '').trim() || '지원기업'; return `${company}_${fileDate()}_자기소개서`; }
 function saveArchive() {
@@ -106,17 +117,25 @@ function saveArchive() {
 }
 function renderArchiveMeta() { const item = state.archives.find(entry => entry.id === state.activeArchiveId); $('archiveName').textContent = item ? `${item.filename} · 보관함 저장됨` : '저장 전'; }
 function interviewQuestions() {
-  const data = profileData(); const projects = allSelectedProjects(); const first = projects[0]; const second = projects[1] || first;
-  if (!first) return [];
-  return [
-    { q: `${first.title}에서 가장 먼저 확인한 원인은 무엇입니까?`, a: `${phrase(first.challenge)}라는 현상을 확인한 뒤, 공정 조건과 설비 동작을 중심으로 원인을 검토했습니다. 단순히 불량을 선별하는 대신 ${phrase(first.action)} 방식으로 원인을 제거하는 개선안을 추진했습니다. 그 결과 ${phrase(first.result)}라는 성과를 확인했습니다.` },
-    { q: '개선안의 효과와 양산 적용 가능성은 어떻게 검증했습니까?', a: `개선 후에는 불량률과 공정 적용 결과를 기준으로 효과를 확인했습니다. 특히 ${phrase(first.result)}라는 수치를 통해 개선 효과를 판단했으며, 검증 과정에서 확인된 조건을 공정에 적용했습니다.` },
-    { q: '협력사 또는 유관 부서와 의견이 달랐을 때 어떻게 조율했습니까?', a: `${first.meta ? `${first.meta} 경험을 바탕으로 ` : ''}문제 현상과 목표 수치를 먼저 공유하고, 역할별로 실행 가능한 대안을 정리했습니다. 개선안은 설비·제작 관점의 의견을 반영해 검증했으며, 결과 데이터를 기준으로 공정 적용 여부를 결정했습니다.` },
-    { q: `${second.title} 경험이 ${data.role || '지원 직무'}에 어떤 강점이 된다고 생각합니까?`, a: `${phrase(second.challenge)} 문제를 해결하는 과정에서 원인 분석, 개선안 수립, 협업, 양산 적용까지 경험했습니다. 이 경험을 통해 ${data.keywords || '공정 개선과 품질 향상'} 업무에서 현장 문제를 수치로 설명하고 실행으로 연결하는 역량을 갖추었습니다.` },
-    { q: `입사 후 ${data.company || '지원 기업'}에서 가장 먼저 개선하고 싶은 부분은 무엇입니까?`, a: `입사 초기에는 담당 공정의 불량 유형, 설비 상태, 생산 데이터를 우선 파악하겠습니다. 이후 영향도가 큰 문제부터 개선 과제를 설정하고, 검증 가능한 수치 목표와 협업 계획을 바탕으로 품질과 생산 안정성 향상에 기여하겠습니다.` }
-  ];
+  const data = profileData();
+  return filledQuestions(data).flatMap((questionId, questionIndex) => {
+    const projects = projectsFor(questionId); const first = projects[0]; const second = projects[1] || first; if (!first) return [];
+    const templates = [
+      [`${data[questionId]}에 이 경험을 선택한 이유는 무엇입니까?`, `${first.title} 경험은 ${data[questionId]}에 필요한 문제 해결 역량을 수치로 보여줄 수 있기 때문에 선택했습니다. ${phrase(first.result)}라는 결과가 있어 주장보다 사실로 설명할 수 있습니다.`],
+      [`${first.title}에서 가장 먼저 확인한 원인은 무엇입니까?`, `${phrase(first.challenge)}라는 현상을 확인한 뒤, 공정 조건과 설비 동작을 중심으로 원인을 검토했습니다. 단순히 불량을 선별하는 대신 ${phrase(first.action)} 방식으로 원인을 제거하는 개선안을 추진했습니다.`],
+      ['개선안의 효과와 양산 적용 가능성은 어떻게 검증했습니까?', `개선 후에는 불량률과 공정 적용 결과를 기준으로 효과를 확인했습니다. 특히 ${phrase(first.result)}라는 수치를 통해 개선 효과를 판단했으며, 검증 과정에서 확인된 조건을 공정에 적용했습니다.`],
+      ['기존 방식 대신 이 개선안을 선택한 근거는 무엇입니까?', `문제 발생 지점과 공정 구조를 기준으로 원인을 제거할 수 있는 방안을 비교했습니다. 설비·공정에 무리 없이 적용할 수 있고 결과를 수치로 검증할 수 있는 방안을 우선 선택했습니다.`],
+      ['진행 과정에서 가장 어려웠던 점과 해결 방법은 무엇입니까?', `개선안이 실제 공정에서도 안정적으로 동작하는지 확인하는 과정이 가장 중요했습니다. 반복 테스트로 조건을 검증하고, 결과 데이터를 바탕으로 보완 사항을 반영했습니다.`],
+      ['협력사 또는 유관 부서와 의견이 달랐을 때 어떻게 조율했습니까?', `${first.meta ? `${first.meta} 경험을 바탕으로 ` : ''}문제 현상과 목표 수치를 먼저 공유하고, 역할별로 실행 가능한 대안을 정리했습니다. 결과 데이터를 기준으로 공정 적용 여부를 결정했습니다.`],
+      [`${phrase(second.title)} 경험이 ${data.role || '지원 직무'}에 어떤 강점이 됩니까?`, `${phrase(second.challenge)} 문제를 해결하는 과정에서 원인 분석, 개선안 수립, 협업, 양산 적용까지 경험했습니다. 이 경험을 통해 ${data.keywords || '공정 개선과 품질 향상'} 업무에서 현장 문제를 수치로 설명하고 실행으로 연결하는 역량을 갖추었습니다.`],
+      ['개선 결과가 재발하지 않도록 어떤 관리 방법을 생각했습니까?', `개선 후에도 동일 지표를 지속적으로 확인하고, 공정 조건과 설비 동작 기준을 관리하는 것이 필요합니다. 이상 징후가 발생하면 원인과 조치 내용을 다시 기록해 재발 가능성을 낮추겠습니다.`],
+      ['이 경험에서 아쉬웠던 점이나 다시 한다면 보완할 부분은 무엇입니까?', `초기 단계부터 검증 항목과 협업 일정을 더 구체적으로 정리하면 적용 시간을 더 줄일 수 있다고 생각합니다. 이후에는 문제 정의, 역할 분담, 검증 기준을 먼저 합의하는 방식으로 보완하겠습니다.`],
+      [`입사 후 ${data.company || '지원 기업'}에서 이 경험을 어떻게 활용하겠습니까?`, `입사 초기에는 담당 공정의 불량 유형, 설비 상태, 생산 데이터를 우선 파악하겠습니다. 이후 영향도가 큰 문제부터 개선 과제를 설정하고, 검증 가능한 수치 목표와 협업 계획을 바탕으로 품질과 생산 안정성 향상에 기여하겠습니다.`]
+    ];
+    return templates.map(([q, a], index) => ({ questionIndex, number: index + 1, q, a }));
+  });
 }
-function renderInterview() { const questions = interviewQuestions(); $('interviewList').innerHTML = questions.length ? questions.map((item, index) => `<article class="interview-card"><p>예상 질문 ${index + 1}</p><h3>${escapeHtml(item.q)}</h3><div><strong>모범 답안</strong><p>${escapeHtml(item.a)}</p></div></article>`).join('') : '<div class="empty-library">초안을 만들기 전에 질문별 이력을 선택해 주세요.</div>'; }
+function renderInterview() { const questions = interviewQuestions(); $('interviewList').innerHTML = questions.length ? questions.map(item => `<article class="interview-card"><p>자소서 질문 ${item.questionIndex + 1} · 예상 질문 ${item.number}</p><h3>${escapeHtml(item.q)}</h3><div><strong>모범 답안</strong><p>${escapeHtml(item.a)}</p></div></article>`).join('') : '<div class="empty-library">초안을 만들기 전에 질문별 이력을 선택해 주세요.</div>'; }
 function renderArchives() {
   const keyword = $('archiveSearch').value.trim().toLowerCase(); const entries = state.archives.filter(item => `${item.filename} ${item.company} ${item.role}`.toLowerCase().includes(keyword)); $('archiveCount').textContent = state.archives.length; $('archiveMeta').textContent = `${state.archives.length}개 저장됨`; $('archiveList').innerHTML = entries.length ? entries.map(item => `<article class="archive-card"><div><p>${escapeHtml(item.filename)}</p><h3>${escapeHtml(item.company)} · ${escapeHtml(item.role || '직무 미입력')}</h3><small>${new Date(item.createdAt).toLocaleDateString('ko-KR')} 생성 · ${item.draft.length.toLocaleString()}자</small></div><button class="secondary" data-load-archive="${item.id}">불러오기</button></article>`).join('') : '<div class="empty-library">검색 결과가 없습니다.</div>'; document.querySelectorAll('[data-load-archive]').forEach(button => button.addEventListener('click', () => loadArchive(button.dataset.loadArchive)));
 }
@@ -152,6 +171,7 @@ function beginEdit(id) { const project = state.projects.find(item => item.id ===
 function resetProjectForm() { $('projectForm').reset(); $('editingProjectId').value = ''; $('projectFormTitle').textContent = '프로젝트 추가'; $('cancelEdit').classList.add('hidden'); }
 function removeProject(id) { state.projects = state.projects.filter(project => project.id !== id); Object.keys(state.allocations).forEach(question => { state.allocations[question] = (state.allocations[question] || []).filter(item => item !== id); }); save(); renderProjectCards(); showToast('프로젝트를 삭제했습니다.'); }
 
+state.profile.question1 = '지원동기 및 입사후 포부';
 profileFields.forEach(id => { $(id).value = state.profile[id] || ''; $(id).addEventListener('input', () => { state.profile = profileData(); save(); renderCompetencies(); }); });
 document.querySelectorAll('.tab-button').forEach(button => button.addEventListener('click', () => switchTab(button.dataset.tab)));
 $('profileForm').addEventListener('submit', event => { event.preventDefault(); state.profile = profileData(); save(); renderCompetencies(); switchTab('selection'); });
