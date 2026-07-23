@@ -6,6 +6,7 @@ const questionFields = ['question1', 'question2', 'question3', 'question4', 'que
 const limitFields = ['limit1', 'limit2', 'limit3', 'limit4', 'limit5'];
 const profileFields = ['company', 'role', 'jobDescription', 'keywords', 'companyNews', 'newsQuery', 'newsFilter', ...questionFields, ...limitFields];
 const defaultProjects = [
+  { id: 'aligner-2022', title: 'KD2000A Aligner 반복 파손 개선', period: '2022.02~비정기 지속', challenge: '서로 다른 KD2000A에서 Vespel Aligner 파손이 반복되어 설비 정지와 외주 수리가 발생.', action: 'SUS 재질 변경을 제안하고 제조사의 최초 변경 작업에서 정비 기술을 습득. 팀장과 세트 단위 교체 방침을 수립하고, SUS 변경 8세트 중 7세트를 직접 교체한 뒤 Bonding Position과 MIL-STD 기반 Die Shear 품질을 검증.', result: '초기 12시간이던 자체 교체·검증 시간을 최근 7~8시간으로 단축. 제조사 인력 단가를 보수적으로 적용할 때 외주 인건비 약 840만원을 절감한 것으로 추산되며, SUS 변경 후 파손 재발 없음.', meta: '설비 개선 · 고장 분석 · 정비 내재화 · 제조사 협업 · 품질검증 · 비용 절감 · 재발 방지' },
   { id: 'pickup-2024', title: 'Chip Pick Up Tool 개선', period: '2024년', challenge: 'Eject Pin과 상하 방식 Pick Up Tool 사용 중 Chip 파손 불량률 2% 발생.', action: '상하 방식 대신 좌우 드래그 방식의 Pick Up Tool을 제안하고 설비 제조사 하드웨어·소프트웨어 엔지니어 2명과 설비 개조 및 공정 테스트를 진행.', result: 'Chip Pick Up 및 Chip 파손 불량률 0% 달성, 6개월간 검증 후 양산 공정 적용.', meta: '반도체 DIE Bonding 공정·설비 개선 · SPC · FMEA' },
   { id: 'ausn-2025', title: 'Substrate AuSn 설계 변경', period: '2025년 · 6개월', challenge: 'AuSn 영역이 Chip Isolation 구간을 넘어 본딩되며 통전 및 역전류 불량률 1% 발생.', action: '제작업체와 협업해 AuSn 사이즈 축소 설계를 수립하고 주문 제작 및 공정 적용 전 과정을 주도.', result: '통전·역전류 불량률 0% 달성.', meta: '외주 제작업체 협업 · 설계 변경 · 양산 적용' }
 ];
@@ -23,6 +24,14 @@ if (!Array.isArray(state.archives)) state.archives = [];
 if (typeof state.activeArchiveId !== 'string') state.activeArchiveId = '';
 
 function save() { localStorage.setItem('resumeStudioV2', JSON.stringify(state)); if (oneDriveToken()) queueCloudSync(); }
+function addApprovedProjects() {
+  const approvedProjects = defaultProjects.filter(project => project.id === 'aligner-2022');
+  const missingProjects = approvedProjects.filter(project => !state.projects.some(savedProject => savedProject.id === project.id));
+  if (!missingProjects.length) return;
+  state.projects.unshift(...missingProjects);
+  save();
+}
+addApprovedProjects();
 function showToast(message) { $('toast').textContent = message; $('toast').classList.add('visible'); setTimeout(() => $('toast').classList.remove('visible'), 2300); }
 function redirectUri() { return `${window.location.origin}${window.location.pathname}`; }
 function oneDriveToken() { const token = readSaved('resumeStudioOneDriveToken'); return token?.accessToken && token.expiresAt > Date.now() ? token.accessToken : ''; }
@@ -186,7 +195,7 @@ function saveArchive() {
   else { const item = { id: `archive-${Date.now()}`, filename, company: data.company || '지원기업', role: data.role || '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), draft: state.draft, profile: data, allocations: JSON.parse(JSON.stringify(state.allocations)) }; state.archives.unshift(item); state.activeArchiveId = item.id; }
   save(); renderArchiveMeta();
 }
-function renderArchiveMeta() { const item = state.archives.find(entry => entry.id === state.activeArchiveId); $('archiveName').textContent = item ? `${item.filename} · 보관함 저장됨` : '저장 전'; }
+function renderArchiveMeta() { const item = state.archives.find(entry => entry.id === state.activeArchiveId); $('archiveName').textContent = item ? `${item.filename} · 지원서 보관함에 저장됨` : '저장 전'; }
 function interviewQuestions() {
   const data = profileData();
   return filledQuestions(data).flatMap((questionId, questionIndex) => {
@@ -223,7 +232,7 @@ function importBackup(file) {
     try {
       const backup = JSON.parse(reader.result); const data = backup?.data;
       if (!data || !Array.isArray(data.projects) || !Array.isArray(data.archives)) throw new Error('invalid');
-      if (!window.confirm('현재 브라우저의 프로젝트와 보관함을 백업 파일 내용으로 바꾸겠습니까?')) return;
+      if (!window.confirm('현재 브라우저의 경험 사례와 지원서 보관함을 백업 파일 내용으로 바꾸겠습니까?')) return;
       Object.keys(state).forEach(key => delete state[key]); Object.assign(state, data); save(); location.reload();
     } catch { showToast('지원서 스튜디오 백업 파일인지 확인해 주세요.'); }
   };
@@ -237,22 +246,22 @@ function feedbackFor(text, data, proofread = false) {
   ]; $('feedbackCards').innerHTML = cards.map(card => `<article class="feedback"><span class="score">${card.score}</span><h3>${card.title}</h3><p>${card.text}</p></article>`).join('');
 }
 function renderDraft() { $('draft').value = state.draft; $('charCount').textContent = `${state.draft.length.toLocaleString()}자`; renderArchiveMeta(); feedbackFor(state.draft, profileData()); }
-function renderProjectCards() { $('projectCards').innerHTML = state.projects.length ? state.projects.map(project => `<article class="project-card"><div class="project-card-head"><div><p>${escapeHtml(project.period || '기간 미입력')}</p><h3>${escapeHtml(project.title)}</h3></div><div class="card-actions"><button data-edit="${project.id}" class="text-button">수정</button><button data-delete="${project.id}" class="delete-button">삭제</button></div></div><dl><div><dt>문제</dt><dd>${escapeHtml(project.challenge)}</dd></div><div><dt>실행</dt><dd>${escapeHtml(project.action)}</dd></div><div><dt>성과</dt><dd>${escapeHtml(project.result)}</dd></div></dl>${project.meta ? `<p class="project-meta">${escapeHtml(project.meta)}</p>` : ''}</article>`).join('') : '<div class="empty-library">아직 저장한 프로젝트가 없습니다.</div>'; $('projectCount').textContent = state.projects.length; document.querySelectorAll('[data-edit]').forEach(button => button.addEventListener('click', () => beginEdit(button.dataset.edit))); document.querySelectorAll('[data-delete]').forEach(button => button.addEventListener('click', () => removeProject(button.dataset.delete))); }
-function beginEdit(id) { const project = state.projects.find(item => item.id === id); if (!project) return; $('editingProjectId').value = project.id; ['Title','Period','Challenge','Action','Result','Meta'].forEach(key => { $(`project${key}`).value = project[key.toLowerCase()]; }); $('projectFormTitle').textContent = '프로젝트 수정'; $('cancelEdit').classList.remove('hidden'); }
-function resetProjectForm() { $('projectForm').reset(); $('editingProjectId').value = ''; $('projectFormTitle').textContent = '프로젝트 추가'; $('cancelEdit').classList.add('hidden'); }
-function removeProject(id) { state.projects = state.projects.filter(project => project.id !== id); Object.keys(state.allocations).forEach(question => { state.allocations[question] = (state.allocations[question] || []).filter(item => item !== id); }); save(); renderProjectCards(); showToast('프로젝트를 삭제했습니다.'); }
+function renderProjectCards() { $('projectCards').innerHTML = state.projects.length ? state.projects.map(project => `<article class="project-card"><div class="project-card-head"><div><p>${escapeHtml(project.period || '기간 미입력')}</p><h3>${escapeHtml(project.title)}</h3></div><div class="card-actions"><button data-edit="${project.id}" class="text-button">수정</button><button data-delete="${project.id}" class="delete-button">삭제</button></div></div><dl><div><dt>문제</dt><dd>${escapeHtml(project.challenge)}</dd></div><div><dt>실행</dt><dd>${escapeHtml(project.action)}</dd></div><div><dt>성과</dt><dd>${escapeHtml(project.result)}</dd></div></dl>${project.meta ? `<p class="project-meta">${escapeHtml(project.meta)}</p>` : ''}</article>`).join('') : '<div class="empty-library">아직 저장한 경험 사례가 없습니다.</div>'; $('projectCount').textContent = state.projects.length; document.querySelectorAll('[data-edit]').forEach(button => button.addEventListener('click', () => beginEdit(button.dataset.edit))); document.querySelectorAll('[data-delete]').forEach(button => button.addEventListener('click', () => removeProject(button.dataset.delete))); }
+function beginEdit(id) { const project = state.projects.find(item => item.id === id); if (!project) return; $('editingProjectId').value = project.id; ['Title','Period','Challenge','Action','Result','Meta'].forEach(key => { $(`project${key}`).value = project[key.toLowerCase()]; }); $('projectFormTitle').textContent = '경험 사례 수정'; $('cancelEdit').classList.remove('hidden'); }
+function resetProjectForm() { $('projectForm').reset(); $('editingProjectId').value = ''; $('projectFormTitle').textContent = '경험 사례 추가'; $('cancelEdit').classList.add('hidden'); }
+function removeProject(id) { state.projects = state.projects.filter(project => project.id !== id); Object.keys(state.allocations).forEach(question => { state.allocations[question] = (state.allocations[question] || []).filter(item => item !== id); }); save(); renderProjectCards(); showToast('경험 사례를 삭제했습니다.'); }
 
 state.profile.question1 = '지원동기 및 입사후 포부';
 profileFields.forEach(id => { $(id).value = state.profile[id] || ''; $(id).addEventListener('input', () => { state.profile = profileData(); save(); renderCompetencies(); }); });
 document.querySelectorAll('.tab-button').forEach(button => button.addEventListener('click', () => switchTab(button.dataset.tab)));
 $('profileForm').addEventListener('submit', event => { event.preventDefault(); state.profile = profileData(); save(); renderCompetencies(); switchTab('selection'); });
 $('backToInfo').addEventListener('click', () => switchTab('info'));
-$('goDraft').addEventListener('click', () => { const data = profileData(); const missing = filledQuestions(data).filter(question => !projectsFor(question).length); if (missing.length) { showToast(`질문 ${missing.map(id => id.replace('question', '')).join(', ')}에 프로젝트를 선택해 주세요.`); return; } state.profile = data; state.draft = makeDraft(data); state.activeArchiveId = ''; saveArchive(); switchTab('draft'); showToast('질문별로 선택한 이력으로 초안을 만들고 보관함에 저장했습니다.'); });
+$('goDraft').addEventListener('click', () => { const data = profileData(); const missing = filledQuestions(data).filter(question => !projectsFor(question).length); if (missing.length) { showToast(`질문 ${missing.map(id => id.replace('question', '')).join(', ')}에 경험 사례를 선택해 주세요.`); return; } state.profile = data; state.draft = makeDraft(data); state.activeArchiveId = ''; saveArchive(); switchTab('draft'); showToast('질문별로 선택한 경험으로 초안을 만들고 지원서 보관함에 저장했습니다.'); });
 $('draft').addEventListener('input', () => { state.draft = $('draft').value; save(); $('charCount').textContent = `${state.draft.length.toLocaleString()}자`; });
 $('reviewButton').addEventListener('click', () => { feedbackFor(state.draft, profileData()); showToast('초안 내용을 다시 점검했습니다.'); });
 $('proofreadButton').addEventListener('click', () => { feedbackFor(state.draft, profileData(), true); showToast('맞춤법·표현 기초 검수를 완료했습니다.'); });
 $('copyButton').addEventListener('click', async () => { await navigator.clipboard.writeText(state.draft); showToast('초안을 클립보드에 복사했습니다.'); });
-$('saveButton').addEventListener('click', () => { saveArchive(); showToast('현재 초안을 보관함에 저장했습니다.'); });
+$('saveButton').addEventListener('click', () => { saveArchive(); showToast('현재 초안을 지원서 보관함에 저장했습니다.'); });
 $('goInterview').addEventListener('click', () => { saveArchive(); switchTab('interview'); });
 $('backToDraft').addEventListener('click', () => switchTab('draft'));
 $('archiveSearch').addEventListener('input', renderArchives);
@@ -261,7 +270,7 @@ $('importBackup').addEventListener('change', event => { if (event.target.files?.
 $('oneDriveLogin').addEventListener('click', beginOneDriveLogin);
 $('oneDriveSync').addEventListener('click', async () => { await syncToOneDrive(); showToast('OneDrive에 저장을 요청했습니다.'); });
 $('fetchNews').addEventListener('click', fetchLatestNews);
-$('projectForm').addEventListener('submit', event => { event.preventDefault(); const id = $('editingProjectId').value || `project-${Date.now()}`; const project = { id, title: $('projectTitle').value.trim(), period: $('projectPeriod').value.trim(), challenge: $('projectChallenge').value.trim(), action: $('projectAction').value.trim(), result: $('projectResult').value.trim(), meta: $('projectMeta').value.trim() }; const index = state.projects.findIndex(item => item.id === id); if (index === -1) state.projects.unshift(project); else state.projects[index] = project; save(); renderProjectCards(); resetProjectForm(); showToast(index === -1 ? '프로젝트를 추가했습니다.' : '프로젝트를 수정했습니다.'); });
+$('projectForm').addEventListener('submit', event => { event.preventDefault(); const id = $('editingProjectId').value || `project-${Date.now()}`; const project = { id, title: $('projectTitle').value.trim(), period: $('projectPeriod').value.trim(), challenge: $('projectChallenge').value.trim(), action: $('projectAction').value.trim(), result: $('projectResult').value.trim(), meta: $('projectMeta').value.trim() }; const index = state.projects.findIndex(item => item.id === id); if (index === -1) state.projects.unshift(project); else state.projects[index] = project; save(); renderProjectCards(); resetProjectForm(); showToast(index === -1 ? '경험 사례를 추가했습니다.' : '경험 사례를 수정했습니다.'); });
 $('cancelEdit').addEventListener('click', resetProjectForm);
 renderCompetencies(); renderProjectCards(); renderArchives(); if (state.draft) renderDraft();
 updateOneDriveStatus(); finishOneDriveLogin();
