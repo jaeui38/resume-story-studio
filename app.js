@@ -1,9 +1,10 @@
 const $ = id => document.getElementById(id);
 const oneDriveConfig = { clientId: '22d17617-e89a-4cb4-a40e-f15ec8e71eb3', authority: 'https://login.microsoftonline.com/consumers', scope: 'openid profile Files.ReadWrite.AppFolder' };
+const newsConfig = { endpoint: 'https://resume-news-search.jaeui38.workers.dev/news' };
 let cloudSyncTimer;
 const questionFields = ['question1', 'question2', 'question3', 'question4', 'question5'];
 const limitFields = ['limit1', 'limit2', 'limit3', 'limit4', 'limit5'];
-const profileFields = ['company', 'role', 'jobDescription', 'keywords', 'companyNews', ...questionFields, ...limitFields];
+const profileFields = ['company', 'role', 'jobDescription', 'keywords', 'companyNews', 'newsQuery', ...questionFields, ...limitFields];
 const defaultProjects = [
   { id: 'pickup-2024', title: 'Chip Pick Up Tool 개선', period: '2024년', challenge: 'Eject Pin과 상하 방식 Pick Up Tool 사용 중 Chip 파손 불량률 2% 발생.', action: '상하 방식 대신 좌우 드래그 방식의 Pick Up Tool을 제안하고 설비 제조사 하드웨어·소프트웨어 엔지니어 2명과 설비 개조 및 공정 테스트를 진행.', result: 'Chip Pick Up 및 Chip 파손 불량률 0% 달성, 6개월간 검증 후 양산 공정 적용.', meta: '반도체 DIE Bonding 공정·설비 개선 · SPC · FMEA' },
   { id: 'ausn-2025', title: 'Substrate AuSn 설계 변경', period: '2025년 · 6개월', challenge: 'AuSn 영역이 Chip Isolation 구간을 넘어 본딩되며 통전 및 역전류 불량률 1% 발생.', action: '제작업체와 협업해 AuSn 사이즈 축소 설계를 수립하고 주문 제작 및 공정 적용 전 과정을 주도.', result: '통전·역전류 불량률 0% 달성.', meta: '외주 제작업체 협업 · 설계 변경 · 양산 적용' }
@@ -58,6 +59,22 @@ async function syncToOneDrive() {
 }
 function queueCloudSync() { clearTimeout(cloudSyncTimer); cloudSyncTimer = setTimeout(syncToOneDrive, 900); }
 function updateOneDriveStatus(message) { const connected = Boolean(oneDriveToken()); $('oneDriveStatus').textContent = message || (connected ? 'OneDrive 연결됨' : 'OneDrive 연결 전'); $('oneDriveLogin').classList.toggle('hidden', connected); $('oneDriveSync').classList.toggle('hidden', !connected); }
+function newsSummary(article) { return `${article.title} (${article.source || '뉴스'}, ${new Date(article.publishedAt).toLocaleDateString('ko-KR')}): ${article.description || ''}`.trim(); }
+function applyNews(article) { $('companyNews').value = newsSummary(article); state.profile = profileData(); save(); renderCompetencies(); $('newsStatus').textContent = '선택한 뉴스가 지원동기 첫 문단에 반영됩니다.'; }
+function renderNewsResults(articles) {
+  $('newsResults').innerHTML = articles.map((article, index) => `<article class="news-result"><div><a href="${escapeHtml(article.url)}" target="_blank" rel="noreferrer">${escapeHtml(article.title)}</a><small>${escapeHtml(article.source || '뉴스')} · ${new Date(article.publishedAt).toLocaleDateString('ko-KR')}</small></div><button type="button" class="secondary" data-news-index="${index}">반영</button></article>`).join('');
+  document.querySelectorAll('[data-news-index]').forEach(button => button.addEventListener('click', () => applyNews(articles[Number(button.dataset.newsIndex)])));
+}
+async function fetchLatestNews() {
+  const company = $('newsQuery').value.trim() || $('company').value.trim();
+  if (!company) { $('company').focus(); showToast('회사명을 먼저 입력해 주세요.'); return; }
+  $('newsStatus').textContent = '최신 뉴스를 검색하고 있습니다…'; $('newsResults').innerHTML = '';
+  try {
+    const response = await fetch(`${newsConfig.endpoint}?company=${encodeURIComponent(company)}`); if (!response.ok) throw new Error('news'); const { articles } = await response.json();
+    if (!articles?.length) { $('newsStatus').textContent = '검색된 뉴스가 없습니다. 회사명을 확인해 주세요.'; return; }
+    applyNews(articles[0]); renderNewsResults(articles); $('newsStatus').textContent = '가장 최신 기사를 자동 반영했습니다. 다른 기사를 선택할 수도 있습니다.';
+  } catch { $('newsStatus').textContent = '뉴스 검색에 실패했습니다. 잠시 후 다시 시도해 주세요.'; }
+}
 function escapeHtml(value = '') { return String(value).replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#039;', '"':'&quot;' })[char]); }
 function profileData() { return Object.fromEntries(profileFields.map(id => [id, $(id).value.trim()])); }
 function usedProjectIds(exceptQuestion = '') { return Object.entries(state.allocations).filter(([question]) => question !== exceptQuestion).flatMap(([, ids]) => Array.isArray(ids) ? ids : []); }
@@ -189,6 +206,7 @@ $('exportBackup').addEventListener('click', exportBackup);
 $('importBackup').addEventListener('change', event => { if (event.target.files?.[0]) importBackup(event.target.files[0]); event.target.value = ''; });
 $('oneDriveLogin').addEventListener('click', beginOneDriveLogin);
 $('oneDriveSync').addEventListener('click', async () => { await syncToOneDrive(); showToast('OneDrive에 저장을 요청했습니다.'); });
+$('fetchNews').addEventListener('click', fetchLatestNews);
 $('projectForm').addEventListener('submit', event => { event.preventDefault(); const id = $('editingProjectId').value || `project-${Date.now()}`; const project = { id, title: $('projectTitle').value.trim(), period: $('projectPeriod').value.trim(), challenge: $('projectChallenge').value.trim(), action: $('projectAction').value.trim(), result: $('projectResult').value.trim(), meta: $('projectMeta').value.trim() }; const index = state.projects.findIndex(item => item.id === id); if (index === -1) state.projects.unshift(project); else state.projects[index] = project; save(); renderProjectCards(); resetProjectForm(); showToast(index === -1 ? '프로젝트를 추가했습니다.' : '프로젝트를 수정했습니다.'); });
 $('cancelEdit').addEventListener('click', resetProjectForm);
 renderCompetencies(); renderProjectCards(); renderArchives(); if (state.draft) renderDraft();

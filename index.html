@@ -19,7 +19,10 @@
           <div class="form-grid"><label>회사명<input id="company" placeholder="예: 삼성전자" /></label><label>지원 직무<input id="role" placeholder="예: 생산기술" /></label></div>
           <label>담당업무(주요업무)<textarea id="jobDescription" rows="8" placeholder="채용공고의 담당업무, 자격요건, 우대사항을 충분히 붙여 넣으세요."></textarea></label>
           <label>채용공고 핵심 키워드 <span class="optional">선택</span><textarea id="keywords" rows="3" placeholder="예: 공정 개선, 품질 향상, 설비 관리, 데이터 분석"></textarea></label>
-          <label>최근 회사 뉴스 요약 <span class="optional">선택</span><textarea id="companyNews" rows="3" placeholder="최근 기사 제목이나 핵심 내용을 붙여 넣으면 지원동기 첫 문단에 반영합니다."></textarea></label>
+          <label>최근 회사 뉴스 요약 <span class="optional">선택</span><textarea id="companyNews" rows="3" placeholder="최신 뉴스 가져오기 결과 또는 직접 입력한 내용을 지원동기 첫 문단에 반영합니다."></textarea></label>
+          <label>뉴스 검색어 <span class="optional">선택</span><input id="newsQuery" placeholder="국문 검색 결과가 없을 때 영문 회사명 입력 (예: LS Cable)" /></label>
+          <div class="news-actions"><button id="fetchNews" type="button" class="secondary">최신 회사 뉴스 가져오기</button><span id="newsStatus" class="question-note"></span></div>
+          <div id="newsResults" class="news-results" aria-live="polite"></div>
           <div class="question-group"><div class="selection-heading"><strong>자기소개서 질문</strong><span class="question-note">질문 1 필수 · 최대 5개</span></div>
             <label>질문 1 <span class="required">고정</span><textarea id="question1" required rows="2" readonly>지원동기 및 입사후 포부</textarea><span class="limit-control">글자 수 제한 <input id="limit1" type="number" min="200" max="5000" step="100" placeholder="기본 1,000자" /> <small>미입력 시 1,000자 기준</small></span></label>
             <label>질문 2 <span class="optional">선택</span><textarea id="question2" rows="3" placeholder="추가 질문을 입력하세요."></textarea><span class="limit-control">글자 수 제한 <input id="limit2" type="number" min="200" max="5000" step="100" placeholder="기본 1,000자" /> <small>미입력 시 1,000자 기준</small></span></label>
