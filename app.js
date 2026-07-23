@@ -71,9 +71,12 @@ async function fetchLatestNews() {
   $('newsStatus').textContent = '지원 회사와 필터 단어를 반영한 기술·투자 뉴스를 검색하고 있습니다…'; $('newsResults').innerHTML = '';
   try {
     const params = new URLSearchParams({ company, role: $('role').value.trim(), keywords: $('keywords').value.trim(), jobDescription: $('jobDescription').value.trim(), filter: $('newsFilter').value.trim() });
-    const response = await fetch(`${newsConfig.endpoint}?${params}`); if (!response.ok) throw new Error('news'); const { articles } = await response.json();
-    if (!articles?.length) { $('newsStatus').textContent = '지원 회사명이 본문에 포함된 기술·투자 뉴스가 없습니다. 회사명을 확인해 주세요.'; return; }
-    applyNews(articles[0]); renderNewsResults(articles); $('newsStatus').textContent = '지원 회사명과 입력한 필터 단어를 반영한 기사만 불러왔습니다.';
+    const response = await fetch(`${newsConfig.endpoint}?${params}`); if (!response.ok) throw new Error('news'); const { articles, fallback } = await response.json();
+    if (!articles?.length) { $('newsStatus').textContent = '입력한 필터 단어와 일치하는 뉴스가 없고, 대신 보여드릴 지원 회사의 최신 기술·투자 뉴스도 없습니다.'; return; }
+    applyNews(articles[0]); renderNewsResults(articles);
+    $('newsStatus').textContent = fallback
+      ? '입력한 필터 단어와 일치하는 뉴스가 없습니다. 대신 지원 회사의 최신 기술·투자 뉴스를 보여드립니다.'
+      : '지원 회사명과 입력한 필터 단어를 반영한 기사만 불러왔습니다.';
   } catch { $('newsStatus').textContent = '뉴스 검색에 실패했습니다. 잠시 후 다시 시도해 주세요.'; }
 }
 function escapeHtml(value = '') { return String(value).replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#039;', '"':'&quot;' })[char]); }
