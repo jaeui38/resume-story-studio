@@ -61,9 +61,20 @@ function queueCloudSync() { clearTimeout(cloudSyncTimer); cloudSyncTimer = setTi
 function updateOneDriveStatus(message) { const connected = Boolean(oneDriveToken()); $('oneDriveStatus').textContent = message || (connected ? 'OneDrive 연결됨' : 'OneDrive 연결 전'); $('oneDriveLogin').classList.toggle('hidden', connected); $('oneDriveSync').classList.toggle('hidden', !connected); }
 function newsSummary(article) { return `${article.title} (${article.source || '뉴스'}, ${new Date(article.publishedAt).toLocaleDateString('ko-KR')}): ${article.description || ''}`.trim(); }
 function applyNews(article) { $('companyNews').value = newsSummary(article); state.profile = profileData(); save(); renderCompetencies(); $('newsStatus').textContent = '선택한 뉴스가 지원동기 첫 문단에 반영됩니다.'; }
-function renderNewsResults(articles) {
-  $('newsResults').innerHTML = articles.map((article, index) => `<article class="news-result"><div><a href="${escapeHtml(article.url)}" target="_blank" rel="noreferrer">${escapeHtml(article.title)}</a><small>${escapeHtml(article.source || '뉴스')} · ${new Date(article.publishedAt).toLocaleDateString('ko-KR')}</small></div><button type="button" class="secondary" data-news-index="${index}">반영</button></article>`).join('');
-  document.querySelectorAll('[data-news-index]').forEach(button => button.addEventListener('click', () => applyNews(articles[Number(button.dataset.newsIndex)])));
+const NEWS_PAGE_SIZE = 5;
+let currentNewsArticles = [];
+function renderNewsResults(articles, page = 1) {
+  currentNewsArticles = articles;
+  const totalPages = Math.max(1, Math.ceil(articles.length / NEWS_PAGE_SIZE));
+  const currentPage = Math.min(Math.max(Number(page) || 1, 1), totalPages);
+  const start = (currentPage - 1) * NEWS_PAGE_SIZE;
+  const pageArticles = articles.slice(start, start + NEWS_PAGE_SIZE);
+  const results = pageArticles.map((article, index) => `<article class="news-result"><div><a href="${escapeHtml(article.url)}" target="_blank" rel="noreferrer">${escapeHtml(article.title)}</a><small>${escapeHtml(article.source || '뉴스')} · ${new Date(article.publishedAt).toLocaleDateString('ko-KR')}</small></div><button type="button" class="secondary" data-news-index="${start + index}">반영</button></article>`).join('');
+  const pageButtons = Array.from({ length: totalPages }, (_, index) => `<button type="button" class="${index + 1 === currentPage ? 'active' : ''}" data-news-page="${index + 1}" aria-label="뉴스 ${index + 1}페이지">${index + 1}</button>`).join('');
+  const pagination = totalPages > 1 ? `<nav class="news-pagination" aria-label="뉴스 페이지"><span>총 ${articles.length}개 · ${currentPage}/${totalPages}페이지</span><div><button type="button" data-news-page="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''}>이전</button>${pageButtons}<button type="button" data-news-page="${currentPage + 1}" ${currentPage === totalPages ? 'disabled' : ''}>다음</button></div></nav>` : `<p class="news-count">총 ${articles.length}개</p>`;
+  $('newsResults').innerHTML = results + pagination;
+  document.querySelectorAll('[data-news-index]').forEach(button => button.addEventListener('click', () => applyNews(currentNewsArticles[Number(button.dataset.newsIndex)])));
+  document.querySelectorAll('[data-news-page]').forEach(button => button.addEventListener('click', () => renderNewsResults(currentNewsArticles, Number(button.dataset.newsPage))));
 }
 async function fetchLatestNews() {
   const company = $('newsQuery').value.trim() || $('company').value.trim();
@@ -72,17 +83,23 @@ async function fetchLatestNews() {
   $('newsStatus').textContent = '지원 회사와 필터 단어를 반영한 기술·투자 뉴스를 검색하고 있습니다…'; $('newsResults').innerHTML = '';
   try {
     const params = new URLSearchParams({ company, role: $('role').value.trim(), keywords: $('keywords').value.trim(), jobDescription: $('jobDescription').value.trim(), filter: $('newsFilter').value.trim() });
-    const response = await fetch(`${newsConfig.endpoint}?${params}`); if (!response.ok) throw new Error('news'); const { articles, fallback } = await response.json();
-    if (!articles?.length) { $('newsStatus').textContent = '입력한 필터 단어와 일치하는 뉴스가 없고, 대신 보여드릴 지원 회사의 최신 기술·투자 뉴스도 없습니다.'; return; }
+    const response = await fetch(`${newsConfig.endpoint}?${params}`); if (!response.ok) throw new Error('news'); const { articles, fallback, rangeMonths = 12 } = await response.json();
+    if (!articles?.length) {
+      $('newsStatus').textContent = requestedFilterTerms.length
+        ? '입력한 필터 단어와 일치하는 뉴스가 없고, 최근 1년 안에 대신 보여드릴 지원 회사의 최신 기술·투자 뉴스도 없습니다.'
+        : '최근 1년 안에 지원 회사의 기술·투자 뉴스가 없습니다.';
+      return;
+    }
     const returnedArticleMatchesFilter = !requestedFilterTerms.length || articles.some(article => {
       const content = `${article.title || ''} ${article.description || ''}`.toLowerCase();
       return requestedFilterTerms.some(term => content.includes(term));
     });
     const usedLatestNewsFallback = Boolean(fallback) || !returnedArticleMatchesFilter;
+    const rangeLabel = Number(rangeMonths) <= 6 ? '최근 6개월' : '최근 1년';
     applyNews(articles[0]); renderNewsResults(articles);
     $('newsStatus').textContent = usedLatestNewsFallback
-      ? '입력한 필터 단어와 일치하는 뉴스가 없습니다. 대신 지원 회사의 최신 기술·투자 뉴스를 보여드립니다.'
-      : '지원 회사명과 입력한 필터 단어를 반영한 기사만 불러왔습니다.';
+      ? `입력한 필터 단어와 일치하는 뉴스가 없습니다. 대신 ${rangeLabel} 기준 지원 회사의 최신 기술·투자 뉴스 ${articles.length}개를 보여드립니다.`
+      : `${rangeLabel} 기준 지원 회사명과 입력한 필터 단어를 반영한 뉴스 ${articles.length}개를 불러왔습니다.`;
   } catch { $('newsStatus').textContent = '뉴스 검색에 실패했습니다. 잠시 후 다시 시도해 주세요.'; }
 }
 function escapeHtml(value = '') { return String(value).replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#039;', '"':'&quot;' })[char]); }
@@ -96,11 +113,35 @@ function termsFor(data, question = '') { return `${data.role} ${data.jobDescript
 function scoreProject(project, data, question = '') { const content = projectContent(project); return termsFor(data, question).reduce((score, term) => score + (content.includes(term) ? 1 : 0), 0); }
 function recommendedProjects(data, question) { return [...state.projects].sort((a, b) => scoreProject(b, data, question) - scoreProject(a, data, question)); }
 function coreCompetencies(data) {
-  const source = `${data.role} ${data.jobDescription} ${data.keywords} ${allSelectedProjects().map(projectContent).join(' ')}`.toLowerCase();
-  const candidates = [
-    ['공정 개선', ['공정', '개선', '수율', 'bonding']], ['설비 개선·관리', ['설비', '장비', 'tool', '자동화']], ['품질 관리·불량 분석', ['품질', '불량', 'spc', 'fmea', '신뢰성']], ['데이터 기반 문제 해결', ['데이터', '분석', '지표', '수치', '통계']], ['양산 안정화', ['양산', '생산', '가동률', '생산성', 'ct']], ['협력사 기술 협업', ['협력사', '제작업체', '외주', '협업', 'vendor']], ['설계·사양 최적화', ['설계', '사양', '치수', 'substrate', 'ausn']], ['원인 분석 및 재발 방지', ['원인', '재발', '리스크', '문제']]
-  ];
-  return candidates.map(([name, terms], index) => ({ name, index, score: terms.reduce((total, term) => total + (source.includes(term) ? 1 : 0), 0) })).sort((a, b) => b.score - a.score || a.index - b.index).slice(0, 5).map(item => item.name);
+  const company = data.company.trim();
+  const role = data.role.toLowerCase();
+  const source = `${company} ${data.role} ${data.jobDescription} ${data.keywords}`.toLowerCase();
+  const industryCompetency =
+    /삼성전자|하이닉스|반도체|die|bonding/.test(source) ? '반도체 공정·수율 이해' :
+    /ls전선|대한전선|케이블|전력|hvdc/.test(source) ? '전력·케이블 제조 이해' :
+    /배터리|이차전지|2차전지|에너지솔루션|sdi|sk온/.test(source) ? '배터리 제조공정 이해' :
+    /자동차|현대차|기아|모빌리티/.test(source) ? '자동차 양산공정 이해' :
+    /디스플레이|oled/.test(source) ? '디스플레이 공정 이해' :
+    company ? `${company} 사업·제품 이해` : '지원 산업·제품 이해';
+  const roleCompetencies =
+    /생산기술|공정|제조|생산/.test(role) ? ['공정 최적화', '설비 개선·자동화', '양산 안정화', '생산성·수율 향상'] :
+    /품질|qa|qc/.test(role) ? ['품질 데이터 분석', '불량 원인 분석', '재발 방지 체계화', '품질 기준·신뢰성 관리'] :
+    /설비|보전|장비/.test(role) ? ['설비 예방보전', '고장 원인 분석', '가동률 향상', '설비 안전·표준화'] :
+    /연구|개발|r&d|설계/.test(role) ? ['제품·공정 설계', '기술 검증·실험', '사양 최적화', '개발 일정·리스크 관리'] :
+    /데이터|소프트웨어|개발자|it/.test(role) ? ['데이터 기반 문제 해결', '시스템 설계·구현', '성능·품질 최적화', '사용자 요구사항 분석'] :
+    /구매|조달|자재/.test(role) ? ['원가·납기 관리', '협력사 품질 관리', '공급망 리스크 대응', '구매 데이터 분석'] :
+    ['문제 원인 분석', '데이터 기반 의사결정', '협업·조율', '실행 결과 검증'];
+  const jdCandidates = [
+    ['품질 관리·불량 분석', ['품질', '불량', 'spc', 'fmea', '신뢰성']],
+    ['데이터 기반 문제 해결', ['데이터', '분석', '통계', '지표']],
+    ['협력사 기술 협업', ['협력사', '외주', 'vendor', '고객']],
+    ['설계·사양 최적화', ['설계', '사양', '도면', 'cad']],
+    ['안전·표준 준수', ['안전', '표준', '규정', '인증']]
+  ].map(([name, terms], index) => ({ name, index, score: terms.reduce((total, term) => total + (source.includes(term) ? 1 : 0), 0) }))
+    .filter(item => item.score > 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map(item => item.name);
+  return [...new Set([industryCompetency, ...jdCandidates, ...roleCompetencies])].slice(0, 5);
 }
 function renderCompetencies() { $('competencyList').innerHTML = coreCompetencies(profileData()).map(name => `<span class="competency-chip">${name}</span>`).join(''); }
 function switchTab(tab) {
