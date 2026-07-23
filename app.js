@@ -4,7 +4,7 @@ const newsConfig = { endpoint: 'https://resume-news-search.jaeui38.workers.dev/n
 let cloudSyncTimer;
 const questionFields = ['question1', 'question2', 'question3', 'question4', 'question5'];
 const limitFields = ['limit1', 'limit2', 'limit3', 'limit4', 'limit5'];
-const profileFields = ['company', 'role', 'jobDescription', 'keywords', 'companyNews', 'newsQuery', ...questionFields, ...limitFields];
+const profileFields = ['company', 'role', 'jobDescription', 'keywords', 'companyNews', 'newsQuery', 'newsFilter', ...questionFields, ...limitFields];
 const defaultProjects = [
   { id: 'pickup-2024', title: 'Chip Pick Up Tool 개선', period: '2024년', challenge: 'Eject Pin과 상하 방식 Pick Up Tool 사용 중 Chip 파손 불량률 2% 발생.', action: '상하 방식 대신 좌우 드래그 방식의 Pick Up Tool을 제안하고 설비 제조사 하드웨어·소프트웨어 엔지니어 2명과 설비 개조 및 공정 테스트를 진행.', result: 'Chip Pick Up 및 Chip 파손 불량률 0% 달성, 6개월간 검증 후 양산 공정 적용.', meta: '반도체 DIE Bonding 공정·설비 개선 · SPC · FMEA' },
   { id: 'ausn-2025', title: 'Substrate AuSn 설계 변경', period: '2025년 · 6개월', challenge: 'AuSn 영역이 Chip Isolation 구간을 넘어 본딩되며 통전 및 역전류 불량률 1% 발생.', action: '제작업체와 협업해 AuSn 사이즈 축소 설계를 수립하고 주문 제작 및 공정 적용 전 과정을 주도.', result: '통전·역전류 불량률 0% 달성.', meta: '외주 제작업체 협업 · 설계 변경 · 양산 적용' }
@@ -68,12 +68,12 @@ function renderNewsResults(articles) {
 async function fetchLatestNews() {
   const company = $('newsQuery').value.trim() || $('company').value.trim();
   if (!company) { $('company').focus(); showToast('회사명을 먼저 입력해 주세요.'); return; }
-  $('newsStatus').textContent = '지원 회사와 직접 관련된 기술·투자 뉴스를 검색하고 있습니다…'; $('newsResults').innerHTML = '';
+  $('newsStatus').textContent = '지원 회사와 필터 단어를 반영한 기술·투자 뉴스를 검색하고 있습니다…'; $('newsResults').innerHTML = '';
   try {
-    const params = new URLSearchParams({ company, role: $('role').value.trim(), keywords: $('keywords').value.trim(), jobDescription: $('jobDescription').value.trim() });
+    const params = new URLSearchParams({ company, role: $('role').value.trim(), keywords: $('keywords').value.trim(), jobDescription: $('jobDescription').value.trim(), filter: $('newsFilter').value.trim() });
     const response = await fetch(`${newsConfig.endpoint}?${params}`); if (!response.ok) throw new Error('news'); const { articles } = await response.json();
     if (!articles?.length) { $('newsStatus').textContent = '지원 회사명이 본문에 포함된 기술·투자 뉴스가 없습니다. 회사명을 확인해 주세요.'; return; }
-    applyNews(articles[0]); renderNewsResults(articles); $('newsStatus').textContent = '지원 회사명이 직접 포함된 기술·투자 기사만 반영했습니다.';
+    applyNews(articles[0]); renderNewsResults(articles); $('newsStatus').textContent = '지원 회사명과 입력한 필터 단어를 반영한 기사만 불러왔습니다.';
   } catch { $('newsStatus').textContent = '뉴스 검색에 실패했습니다. 잠시 후 다시 시도해 주세요.'; }
 }
 function escapeHtml(value = '') { return String(value).replace(/[&<>'"]/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#039;', '"':'&quot;' })[char]); }
