@@ -116,7 +116,9 @@ function coreCompetencies(data) {
   const company = data.company.trim();
   const role = data.role.toLowerCase();
   const source = `${company} ${data.role} ${data.jobDescription} ${data.keywords}`.toLowerCase();
+  const softwareRole = /앱|모바일|ios|android|프론트엔드|frontend|백엔드|backend|개발자|소프트웨어|software|it/.test(role);
   const industryCompetency =
+    /배달의민족|우아한형제들|배달|커머스|플랫폼|이커머스/.test(source) ? '플랫폼 사용자·비즈니스 이해' :
     /삼성전자|하이닉스|반도체|die|bonding/.test(source) ? '반도체 공정·수율 이해' :
     /ls전선|대한전선|케이블|전력|hvdc/.test(source) ? '전력·케이블 제조 이해' :
     /배터리|이차전지|2차전지|에너지솔루션|sdi|sk온/.test(source) ? '배터리 제조공정 이해' :
@@ -124,11 +126,12 @@ function coreCompetencies(data) {
     /디스플레이|oled/.test(source) ? '디스플레이 공정 이해' :
     company ? `${company} 사업·제품 이해` : '지원 산업·제품 이해';
   const roleCompetencies =
+    softwareRole ? ['모바일 앱 아키텍처·개발', '서비스 안정성·성능 최적화', '사용자 데이터 기반 제품 개선', '제품·디자인·백엔드 협업'] :
     /생산기술|공정|제조|생산/.test(role) ? ['공정 최적화', '설비 개선·자동화', '양산 안정화', '생산성·수율 향상'] :
     /품질|qa|qc/.test(role) ? ['품질 데이터 분석', '불량 원인 분석', '재발 방지 체계화', '품질 기준·신뢰성 관리'] :
     /설비|보전|장비/.test(role) ? ['설비 예방보전', '고장 원인 분석', '가동률 향상', '설비 안전·표준화'] :
-    /연구|개발|r&d|설계/.test(role) ? ['제품·공정 설계', '기술 검증·실험', '사양 최적화', '개발 일정·리스크 관리'] :
-    /데이터|소프트웨어|개발자|it/.test(role) ? ['데이터 기반 문제 해결', '시스템 설계·구현', '성능·품질 최적화', '사용자 요구사항 분석'] :
+    /연구|r&d|설계|제품개발/.test(role) ? ['제품·기술 설계', '기술 검증·실험', '사양 최적화', '개발 일정·리스크 관리'] :
+    /데이터|분석가|data/.test(role) ? ['데이터 기반 문제 해결', '분석 모델·지표 설계', '인사이트 도출·실행', '이해관계자 요구사항 분석'] :
     /구매|조달|자재/.test(role) ? ['원가·납기 관리', '협력사 품질 관리', '공급망 리스크 대응', '구매 데이터 분석'] :
     ['문제 원인 분석', '데이터 기반 의사결정', '협업·조율', '실행 결과 검증'];
   const jdCandidates = [
@@ -138,10 +141,10 @@ function coreCompetencies(data) {
     ['설계·사양 최적화', ['설계', '사양', '도면', 'cad']],
     ['안전·표준 준수', ['안전', '표준', '규정', '인증']]
   ].map(([name, terms], index) => ({ name, index, score: terms.reduce((total, term) => total + (source.includes(term) ? 1 : 0), 0) }))
-    .filter(item => item.score > 0)
+    .filter(item => item.score > 0 && !(softwareRole && ['데이터 기반 문제 해결', '설계·사양 최적화'].includes(item.name)))
     .sort((a, b) => b.score - a.score || a.index - b.index)
     .map(item => item.name);
-  return [...new Set([industryCompetency, ...jdCandidates, ...roleCompetencies])].slice(0, 5);
+  return [...new Set([industryCompetency, roleCompetencies[0], roleCompetencies[1], ...jdCandidates, ...roleCompetencies.slice(2)])].slice(0, 5);
 }
 function renderCompetencies() { $('competencyList').innerHTML = coreCompetencies(profileData()).map(name => `<span class="competency-chip">${name}</span>`).join(''); }
 function switchTab(tab) {
