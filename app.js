@@ -67,14 +67,20 @@ function renderNewsResults(articles) {
 }
 async function fetchLatestNews() {
   const company = $('newsQuery').value.trim() || $('company').value.trim();
+  const requestedFilterTerms = $('newsFilter').value.trim().toLowerCase().split(/[\s,·/()\[\]{}]+/).filter(term => term.length >= 2);
   if (!company) { $('company').focus(); showToast('회사명을 먼저 입력해 주세요.'); return; }
   $('newsStatus').textContent = '지원 회사와 필터 단어를 반영한 기술·투자 뉴스를 검색하고 있습니다…'; $('newsResults').innerHTML = '';
   try {
     const params = new URLSearchParams({ company, role: $('role').value.trim(), keywords: $('keywords').value.trim(), jobDescription: $('jobDescription').value.trim(), filter: $('newsFilter').value.trim() });
     const response = await fetch(`${newsConfig.endpoint}?${params}`); if (!response.ok) throw new Error('news'); const { articles, fallback } = await response.json();
     if (!articles?.length) { $('newsStatus').textContent = '입력한 필터 단어와 일치하는 뉴스가 없고, 대신 보여드릴 지원 회사의 최신 기술·투자 뉴스도 없습니다.'; return; }
+    const returnedArticleMatchesFilter = !requestedFilterTerms.length || articles.some(article => {
+      const content = `${article.title || ''} ${article.description || ''}`.toLowerCase();
+      return requestedFilterTerms.some(term => content.includes(term));
+    });
+    const usedLatestNewsFallback = Boolean(fallback) || !returnedArticleMatchesFilter;
     applyNews(articles[0]); renderNewsResults(articles);
-    $('newsStatus').textContent = fallback
+    $('newsStatus').textContent = usedLatestNewsFallback
       ? '입력한 필터 단어와 일치하는 뉴스가 없습니다. 대신 지원 회사의 최신 기술·투자 뉴스를 보여드립니다.'
       : '지원 회사명과 입력한 필터 단어를 반영한 기사만 불러왔습니다.';
   } catch { $('newsStatus').textContent = '뉴스 검색에 실패했습니다. 잠시 후 다시 시도해 주세요.'; }
